@@ -1,0 +1,83 @@
+# Gerekli paketler
+library(DESeq2)
+library(ggplot2)
+library(pheatmap)
+library(RColorBrewer)
+library(EnhancedVolcano)
+library(openxlsx)
+library(vsn)
+
+# Çalışma dizini
+setwd("C:/Users/mbeyz/OneDrive/Belgeler/R/1")
+
+# Sayım verisi
+counts <- read.table("count.out", header = TRUE, sep = "\t", comment.char = "#", row.names = 1)
+countData <- counts[, 6:11]
+colnames(countData) <- c("C1", "C2", "C3", "T1", "T2", "T3")
+
+# Koşul bilgisi
+condition <- factor(c("Control", "Control", "Control", "Treatment", "Treatment", "Treatment"),
+                    levels = c("Control", "Treatment"))
+colData <- data.frame(row.names = colnames(countData), condition)
+
+# DESeq2 nesnesi
+dds <- DESeqDataSetFromMatrix(countData = countData, colData = colData, design = ~ condition)
+dds <- dds[rowSums(counts(dds)) > 10, ]
+dds <- DESeq(dds)
+
+# Normalize counts
+norm_counts <- counts(dds, normalized = TRUE)
+write.xlsx(as.data.frame(norm_counts), "Normalized_Counts.xlsx", rowNames = TRUE)
+
+# DE sonuçları
+res <- results(dds)
+resOrdered <- res[order(res$padj), ]
+write.xlsx(as.data.frame(resOrdered), "All_Genes_DESeq2_Result.xlsx", rowNames = TRUE)
+
+# Anlamlı genler
+res_sig <- res[which(res$padj < 0.05 & abs(res$log2FoldChange) > 1), ]
+write.xlsx(as.data.frame(res_sig), "Significant_Genes_log2FC1.xlsx", rowNames = TRUE)
+
+up_genes <- subset(res_sig, log2FoldChange > 1)
+down_genes <- subset(res_sig, log2FoldChange < -1)
+write.xlsx(as.data.frame(up_genes), "Upregulated_Genes.xlsx", rowNames = TRUE)
+write.xlsx(as.data.frame(down_genes), "Downregulated_Genes.xlsx", rowNames = TRUE)
+
+# Volcano Plot: Kırmızı (Up), Lacivert (Down)
+png("VolcanoPlot_Tgamsii_vs_Control.png", width = 2000, height = 1600, res = 300)
+EnhancedVolcano(res,
+                lab = rownames(res),
+                x = "log2FoldChange",
+                y = "padj",
+                pCutoff = 0.05,
+                FCcutoff = 1,
+                title = "Volcano Plot - T.gamsii vs Control",
+                subtitle = "log2FC > 1 & padj < 0.05",
+                pointSize = 2.0,
+                labSize = 3.0,
+                col = c("grey30", "navy", "red", "purple"),
+                colAlpha = 1)
+dev.off()
+
+# PCA plot
+vsd <- vst(dds, blind = FALSE)
+pcaData <- plotPCA(vsd, intgroup = "condition", returnData = TRUE)
+percentVar <- round(100 * attr(pcaData, "percentVar"))
+
+png("PCAPlot_Tgamsii_vs_Control.png", width = 2000, height = 1600, res = 300)
+ggplot(pcaData, aes(x = PC1, y = PC2, color = condition)) +
+  geom_point(size = 3) +
+  xlab(paste0("PC1: ", percentVar[1], "%")) +
+  ylab(paste0("PC2: ", percentVar[2], "%")) +
+  ggtitle("PCA Plot") +
+  theme_minimal()
+dev.off()
+
+# Heatmap (Top 50 varyans)
+select <- order(rowVars(assay(vsd)), decreasing = TRUE)[1:50]
+png("Heatmap_Top50_Tgamsii_vs_Control.png", width = 2000, height = 1600, res = 300)
+pheatmap(assay(vsd)[select, ],
+         cluster_rows = TRUE, cluster_cols = TRUE,
+         show_rownames = FALSE, annotation_col = colData,
+         color = colorRampPalette(rev(brewer.pal(9, "RdBu")))(255))
+dev.off()
