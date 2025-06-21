@@ -14,34 +14,113 @@ Bu depo, ham RNA-seq verisinden okunma sayısı (count matrix) oluşturmak için
 
 ---
 
-## 📂 Adım Adım İş Akışı
+# 💻 RNA-seq Count Matrix Oluşturma: Detaylı Linux Komutlarıyla Biyoinformatik İş Akışı
 
-### 1. Miniconda Kurulumu
-Miniconda kurulumu, kanal ekleme ve ortam oluşturma adımları.
-
-### 2. Veri İndirme (SRA)
-`prefetch` ve `fasterq-dump` komutlarıyla SRR dosyalarının indirilmesi ve FASTQ’ya dönüştürülmesi.
-
-### 3. Kalite Kontrol (FastQC & MultiQC)
-FASTQ dosyalarının kalite analizi ve birleşik rapor oluşturulması.
-
-### 4. Okuma Temizleme (Trimming)
-`fastp` kullanarak düşük kaliteli ve adaptör içeren bölgelerin temizlenmesi.
-
-### 5. Referans Genom İndeksleme
-`STAR` ile referans genomun indekslenmesi.
-
-### 6. RNA-seq Verilerinin Hizalanması
-`STAR` ile FASTQ dosyalarının genom üzerine hizalanması.
-
-### 7. BAM Dosyalarının Yönetimi
-`samtools` kullanılarak BAM dosyalarının birleştirilmesi ve sıralanması.
-
-### 8. Count Matrix Oluşturma
-`featureCounts` komutu ile gen seviyesinde okunma sayılarının elde edilmesi.
+Bu belge, RNA-seq verilerinden okunma sayısı (count matrix) elde etmek için kullanılan tüm komutları adım adım açıklar.
 
 ---
 
-## 📁 Ekstra Bilgiler
-Detaylı adımlar `linux_pipeline/` klasöründe markdown dosyaları olarak eklenebilir.
+## 1. Miniconda Kurulumu
+```bash
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh
+bash ~/miniconda.sh
+source ~/.bashrc
+conda --version
+
+conda config --add channels conda-forge
+conda config --add channels bioconda
+conda config --set channel_priority strict
+
+# Paket kurulumu
+conda install sra-tools fastqc fastp star samtools subread
+# MultiQC için pip gerekebilir:
+pip install multiqc
+```
+
+---
+
+## 2. Veri İndirme (SRA)
+```bash
+# SRR dosyasını indir
+prefetch SRRXXXXXXX
+
+# FASTQ'ya dönüştür
+fasterq-dump SRRXXXXXXX --split-files -e 6 -O .
+```
+
+---
+
+## 3. Kalite Kontrol (FastQC & MultiQC)
+```bash
+# Kalite analizi
+fastqc *.fastq.gz
+
+# Raporları birleştir
+multiqc ./
+```
+
+---
+
+## 4. FASTQ Temizleme (fastp)
+```bash
+fastp --in1 forward.fastq.gz --in2 reverse.fastq.gz \
+      --out1 clean_forward.fastq.gz --out2 clean_reverse.fastq.gz
+```
+
+---
+
+## 5. Referans Genomu İndeksleme (STAR)
+```bash
+STAR --runMode genomeGenerate \
+     --genomeDir ref/ \
+     --genomeFastaFiles genome.fna \
+     --sjdbGTFfile annotation.gtf \
+     --runThreadN 12
+```
+
+---
+
+## 6. Hizalama (STAR)
+```bash
+for sample in *_1.fastq.gz; do
+    base=$(basename "$sample" _1.fastq.gz)
+    STAR --genomeDir ref/ \
+         --readFilesIn ${base}_1.fastq.gz ${base}_2.fastq.gz \
+         --runThreadN 12 \
+         --outFileNamePrefix mapped/${base}_ \
+         --outSAMtype BAM SortedByCoordinate;
+done
+```
+
+---
+
+## 7. BAM Dosyası Yönetimi (samtools)
+```bash
+# Gerekirse birleştirme örneği
+samtools merge merged.bam file1.bam file2.bam
+
+# İndeksleme
+samtools index merged.bam
+```
+
+---
+
+## 8. Sayım Matrisi Oluşturma (featureCounts)
+```bash
+featureCounts -a annotation.gtf \
+              -o count.out \
+              -T 4 bams/*.bam
+```
+
+---
+
+## 📁 Klasör Yapısı Önerisi
+```
+project/
+├── fastq/               # FASTQ dosyaları
+├── mapped/              # BAM çıktıları
+├── ref/                 # Referans genom ve indeks
+├── multiqc_report/      # QC raporları
+├── subread/             # featureCounts çıktıları
+└── linux_pipeline.md    # Bu doküman
 
