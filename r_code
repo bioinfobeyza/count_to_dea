@@ -7,34 +7,45 @@ library(EnhancedVolcano)
 library(openxlsx)
 library(vsn)
 
-# Çalışma dizini
-setwd("C:/Users/mbeyz/OneDrive/Belgeler/R/1")
+# DESeq2 Analiz Scripti 
+# Tum RNA-seq calismalarinizda kullanabileceginiz genel bir sablon
 
-# Sayım verisi
+# Gerekli paketler
+dependencies <- c("DESeq2", "ggplot2", "pheatmap", "RColorBrewer", "EnhancedVolcano", "openxlsx", "vsn")
+lapply(dependencies, require, character.only = TRUE)
+
+# Calisma dizini - ihtiyaca gore degistiriniz
+setwd("/path/to/your/project")
+
+# Sayim verisi
 counts <- read.table("count.out", header = TRUE, sep = "\t", comment.char = "#", row.names = 1)
-countData <- counts[, 6:11]
-colnames(countData) <- c("C1", "C2", "C3", "T1", "T2", "T3")
+countData <- counts[, 6:ncol(counts)]  # featureCounts ilk 5 kolonu metadata
 
-# Koşul bilgisi
-condition <- factor(c("Control", "Control", "Control", "Treatment", "Treatment", "Treatment"),
-                    levels = c("Control", "Treatment"))
-colData <- data.frame(row.names = colnames(countData), condition)
+# Kolon isimleri (SRR ID'ler) duzenlenmeli ise:
+colnames(countData) <- gsub(".*(SRR[0-9]+).*", "\\1", colnames(countData))
+
+# Kosul bilgisi (ornegin 3 kontrol - 3 tedavi grubu)
+# SRR numaralari sirayla yazilmali
+sample_ids <- colnames(countData)
+condition <- factor(c(rep("Control", 3), rep("Treatment", 3)), levels = c("Control", "Treatment"))
+colData <- data.frame(row.names = sample_ids, condition)
 
 # DESeq2 nesnesi
 dds <- DESeqDataSetFromMatrix(countData = countData, colData = colData, design = ~ condition)
-dds <- dds[rowSums(counts(dds)) > 10, ]
+dds <- dds[rowSums(counts(dds)) > 10, ]  # dusuk ifadeli genler filtrelenir
 dds <- DESeq(dds)
 
-# Normalize counts
-norm_counts <- counts(dds, normalized = TRUE)
-write.xlsx(as.data.frame(norm_counts), "Normalized_Counts.xlsx", rowNames = TRUE)
+# Normalize okunma sayilari
+tnorm_counts <- counts(dds, normalized = TRUE)
+write.xlsx(as.data.frame(tnorm_counts), "Normalized_Counts.xlsx", rowNames = TRUE)
 
-# DE sonuçları
+# Diferansiyel ifade analizi
 res <- results(dds)
+res <- na.omit(res)
 resOrdered <- res[order(res$padj), ]
 write.xlsx(as.data.frame(resOrdered), "All_Genes_DESeq2_Result.xlsx", rowNames = TRUE)
 
-# Anlamlı genler
+# Anlamli genler (padj < 0.05 ve |log2FC| > 1)
 res_sig <- res[which(res$padj < 0.05 & abs(res$log2FoldChange) > 1), ]
 write.xlsx(as.data.frame(res_sig), "Significant_Genes_log2FC1.xlsx", rowNames = TRUE)
 
@@ -43,15 +54,15 @@ down_genes <- subset(res_sig, log2FoldChange < -1)
 write.xlsx(as.data.frame(up_genes), "Upregulated_Genes.xlsx", rowNames = TRUE)
 write.xlsx(as.data.frame(down_genes), "Downregulated_Genes.xlsx", rowNames = TRUE)
 
-# Volcano Plot: Kırmızı (Up), Lacivert (Down)
-png("VolcanoPlot_Tgamsii_vs_Control.png", width = 2000, height = 1600, res = 300)
+# Volcano Plot
+png("VolcanoPlot.png", width = 2000, height = 1600, res = 300)
 EnhancedVolcano(res,
                 lab = rownames(res),
                 x = "log2FoldChange",
                 y = "padj",
                 pCutoff = 0.05,
                 FCcutoff = 1,
-                title = "Volcano Plot - T.gamsii vs Control",
+                title = "Volcano Plot",
                 subtitle = "log2FC > 1 & padj < 0.05",
                 pointSize = 2.0,
                 labSize = 3.0,
@@ -64,7 +75,7 @@ vsd <- vst(dds, blind = FALSE)
 pcaData <- plotPCA(vsd, intgroup = "condition", returnData = TRUE)
 percentVar <- round(100 * attr(pcaData, "percentVar"))
 
-png("PCAPlot_Tgamsii_vs_Control.png", width = 2000, height = 1600, res = 300)
+png("PCAPlot.png", width = 2000, height = 1600, res = 300)
 ggplot(pcaData, aes(x = PC1, y = PC2, color = condition)) +
   geom_point(size = 3) +
   xlab(paste0("PC1: ", percentVar[1], "%")) +
@@ -73,9 +84,10 @@ ggplot(pcaData, aes(x = PC1, y = PC2, color = condition)) +
   theme_minimal()
 dev.off()
 
-# Heatmap (Top 50 varyans)
+# Heatmap (Top 50 degisken gen)
 select <- order(rowVars(assay(vsd)), decreasing = TRUE)[1:50]
-png("Heatmap_Top50_Tgamsii_vs_Control.png", width = 2000, height = 1600, res = 300)
+
+png("Heatmap_Top50.png", width = 2000, height = 1600, res = 300)
 pheatmap(assay(vsd)[select, ],
          cluster_rows = TRUE, cluster_cols = TRUE,
          show_rownames = FALSE, annotation_col = colData,
