@@ -1,0 +1,47 @@
+Bu depo, ham RNA-seq verisinden okunma sayısı (count matrix) oluşturmak için kullanılan biyoinformatik araçların Linux ortamındaki kullanımını adım adım açıklamaktadır.
+
+---
+
+## 🧰 Kullanılan Araçlar
+- sra-tools
+- fastqc
+- multiqc
+- fastp
+- STAR
+- samtools
+- subread
+- Miniconda
+
+---
+
+## 📂 Adım Adım İş Akışı
+
+### 1. Miniconda Kurulumu
+Miniconda kurulumu, kanal ekleme ve ortam oluşturma adımları.
+
+### 2. Veri İndirme (SRA)
+`prefetch` ve `fasterq-dump` komutlarıyla SRR dosyalarının indirilmesi ve FASTQ’ya dönüştürülmesi.
+
+### 3. Kalite Kontrol (FastQC & MultiQC)
+FASTQ dosyalarının kalite analizi ve birleşik rapor oluşturulması.
+
+### 4. Okuma Temizleme (Trimming)
+`fastp` kullanarak düşük kaliteli ve adaptör içeren bölgelerin temizlenmesi.
+
+### 5. Referans Genom İndeksleme
+`STAR` ile referans genomun indekslenmesi.
+
+### 6. RNA-seq Verilerinin Hizalanması
+`STAR` ile FASTQ dosyalarının genom üzerine hizalanması.
+
+### 7. BAM Dosyalarının Yönetimi
+`samtools` kullanılarak BAM dosyalarının birleştirilmesi ve sıralanması.
+
+### 8. Count Matrix Oluşturma
+`featureCounts` komutu ile gen seviyesinde okunma sayılarının elde edilmesi.
+
+---
+
+## 📁 Ekstra Bilgiler
+Detaylı adımlar `linux_pipeline/` klasöründe markdown dosyaları olarak eklenebilir.
+
